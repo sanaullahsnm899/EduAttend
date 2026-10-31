@@ -10,7 +10,6 @@ import XLSX from 'xlsx-js-style';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
-const UTF8 = 'utf8';
 
 // ── Style presets (matching the original printed register) ───────────────────
 
@@ -45,11 +44,15 @@ function styleCell(value, opts = {}) {
   };
 }
 
-function formulaCell(formula, opts = {}) {
-  const { halign = 'left', valign = 'center' } = opts;
+function formulaCell(formula, cachedValue, opts = {}) {
+  const { halign = 'center', valign = 'center', percent = false } = opts;
   return {
     f: formula,
+    // Cached results make totals visible in Android XLSX previews that do not
+    // calculate formulas; desktop Excel can still recalculate the formula.
+    v: cachedValue,
     t: 'n',
+    ...(percent ? { z: '0.0%' } : {}),
     s: {
       font: FONT_BASE,
       alignment: { horizontal: halign, vertical: valign },
@@ -97,10 +100,10 @@ function buildClassSheet(classObj, studentsInClass, attendance, sortedDates, sch
   const attCol = PREFIX_COLS + numDates + 1; // 1-indexed "Att" column
   const attPctCol = attCol + 1; // "Att %" column
 
-  // Row 3 has fixed-position fields regardless of date count; keep the grid
-  // wide enough to safely hold them without sparse-array issues.
-  const MIN_ROW3_COLS = 19;
-  const totalCols = Math.max(attPctCol, MIN_ROW3_COLS);
+  // Keep the exported sheet as wide as the attendance register actually is.
+  // The former 22-column minimum created many empty columns and made short
+  // registers unreadably small in mobile spreadsheet previews.
+  const totalCols = attPctCol;
 
   const ws = {};
   const merges = [];
@@ -132,19 +135,15 @@ function buildClassSheet(classObj, studentsInClass, attendance, sortedDates, sch
   merges.push({ s: { r: 1, c: 2 }, e: { r: 1, c: attPctCol - 1 } });
   fillRowBlank(1, 0, totalCols);
 
-  // ── Row 3 (index 2): CLASS NAME / Total Classes / dates range ──────
-  setCell(2, 0, styleCell('CLASS NAME     :', { bold: true, halign: 'left' }));
-  setCell(2, 2, styleCell(classObj.name || '', { halign: 'left' }));
-  setCell(2, 3, styleCell('Total Classess :', { bold: true, halign: 'right' }));
-  setCell(2, 9, styleCell(numDates, { halign: 'left' }));
-  setCell(2, 12, styleCell(classObj.start || '', { halign: 'left' }));
-  setCell(2, 16, styleCell('To :', { bold: true, halign: 'right' }));
-  setCell(2, 18, styleCell(classObj.end || '', { halign: 'left' }));
+  // ── Row 3 (index 2): class and session/date range metadata ───────
+  setCell(2, 0, styleCell('CLASS NAME :', { bold: true, halign: 'left' }));
+  setCell(2, 2, styleCell(classObj.name || '', { halign: 'left', wrap: true }));
+  setCell(2, 3, styleCell(
+    `Sessions: ${numDates} | ${classObj.start || '—'} to ${classObj.end || '—'}`,
+    { halign: 'left', wrap: true }
+  ));
   merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: 1 } });
-  merges.push({ s: { r: 2, c: 9 }, e: { r: 2, c: 10 } });
-  merges.push({ s: { r: 2, c: 12 }, e: { r: 2, c: 15 } });
-  merges.push({ s: { r: 2, c: 16 }, e: { r: 2, c: 17 } });
-  merges.push({ s: { r: 2, c: 18 }, e: { r: 2, c: 21 } });
+  merges.push({ s: { r: 2, c: 3 }, e: { r: 2, c: totalCols - 1 } });
   fillRowBlank(2, 0, totalCols);
 
   // ── Row 4 (index 3): S.N. | MONTH > | month numbers ... | Att ───────
@@ -157,6 +156,7 @@ function buildClassSheet(classObj, studentsInClass, attendance, sortedDates, sch
     dCol++;
   });
   setCell(3, attCol - 1, styleCell('Att', { bold: true }));
+  setCell(3, attPctCol - 1, styleCell('Att %', { bold: true }));
   merges.push({ s: { r: 3, c: 0 }, e: { r: 5, c: 0 } }); // A4:A6
   merges.push({ s: { r: 3, c: attCol - 1 }, e: { r: 5, c: attCol - 1 } });
   merges.push({ s: { r: 3, c: attPctCol - 1 }, e: { r: 5, c: attPctCol - 1 } });
@@ -194,13 +194,19 @@ function buildClassSheet(classObj, studentsInClass, attendance, sortedDates, sch
     setCell(r, 2, styleCell(student.name, { halign: 'left' }));
 
     let dc = PREFIX_COLS;
+    let present = 0;
+    let marked = 0;
     sortedDates.forEach((dateStr) => {
       const key = `${dateStr}_${classObj.id}`;
       const record = attendance[key];
-      const status = record ? (record[student.id] || 'A') : '-';
+      const status = record ? (record[student.id] || '-') : '-';
+      if (status === 'P') present++;
+      if (status === 'P' || status === 'A' || status === 'L') marked++;
       setCell(r, dc, styleCell(status, { halign: 'center' }));
       dc++;
     });
+    // Unmarked days are not automatically counted as absences.
+    const attendancePercentage = marked > 0 ? present / marked : 0;
 
     const firstDateColLetter = colLetter(PREFIX_COLS + 1);
     const lastDateColLetter = colLetter(PREFIX_COLS + numDates);
@@ -210,16 +216,16 @@ function buildClassSheet(classObj, studentsInClass, attendance, sortedDates, sch
       setCell(
         r,
         attCol - 1,
-        formulaCell(`COUNTIF(${firstDateColLetter}${excelRow}:${lastDateColLetter}${excelRow},"P")`)
+        formulaCell(`COUNTIF(${firstDateColLetter}${excelRow}:${lastDateColLetter}${excelRow},"P")`, present)
       );
       setCell(
         r,
         attPctCol - 1,
-        formulaCell(`ROUND(${attColLetter}${excelRow}/${numDates}*100,1)`)
+        formulaCell(`IFERROR(${attColLetter}${excelRow}/(COUNTIF(${firstDateColLetter}${excelRow}:${lastDateColLetter}${excelRow},"P")+COUNTIF(${firstDateColLetter}${excelRow}:${lastDateColLetter}${excelRow},"A")+COUNTIF(${firstDateColLetter}${excelRow}:${lastDateColLetter}${excelRow},"L")),0)`, attendancePercentage, { percent: true })
       );
     } else {
-      setCell(r, attCol - 1, styleCell(0, { halign: 'left' }));
-      setCell(r, attPctCol - 1, styleCell(0, { halign: 'left' }));
+      setCell(r, attCol - 1, styleCell(0, { halign: 'center' }));
+      setCell(r, attPctCol - 1, { ...styleCell(0), z: '0.0%' });
     }
 
     fillRowBlank(r, 0, totalCols);
@@ -239,14 +245,16 @@ function buildClassSheet(classObj, studentsInClass, attendance, sortedDates, sch
     if (i === 0) cols.push({ wch: 5 });
     else if (i === 1) cols.push({ wch: 14 });
     else if (i === 2) cols.push({ wch: 26 });
-    else cols.push({ wch: 4 });
+    else if (i === attCol - 1) cols.push({ wch: 8 });
+    else if (i === attPctCol - 1) cols.push({ wch: 10 });
+    else cols.push({ wch: 5 });
   }
   ws['!cols'] = cols;
 
   // Row heights (header rows + data rows match the original's ~13-15pt)
   const rows = [];
   for (let i = 0; i <= lastRow; i++) {
-    rows.push({ hpt: i < headerRowCount ? 13 : 15 });
+    rows.push({ hpt: i === 2 ? 26 : i < headerRowCount ? 17 : 20 });
   }
   ws['!rows'] = rows;
 
@@ -342,25 +350,3 @@ export async function exportAllXLSX(classes, students, attendance, schoolName) {
   }
 }
 
-export async function exportBackupJSON(classes, students, attendance, editHistory, settings) {
-  try {
-    const data = { classes, students, attendance, editHistory, settings: settings || {} };
-    const jsonContent = JSON.stringify(data, null, 2);
-    const fileName = `EduAttend_backup_${new Date().toISOString().split('T')[0]}.json`;
-    const fileUri = FileSystem.documentDirectory + fileName;
-
-    await FileSystem.writeAsStringAsync(fileUri, jsonContent, { encoding: UTF8 });
-
-    const isAvailable = await Sharing.isAvailableAsync();
-    if (isAvailable) {
-      await Sharing.shareAsync(fileUri, {
-        mimeType: 'application/json',
-        dialogTitle: 'Export EduAttend Backup',
-      });
-    }
-    return true;
-  } catch (e) {
-    console.error('exportBackupJSON error:', e);
-    throw e;
-  }
-}

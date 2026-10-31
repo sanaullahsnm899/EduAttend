@@ -1,8 +1,8 @@
+import { Text } from '../src/components/Typography';
 // FILE: app/settings.js
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   Alert,
@@ -50,16 +50,18 @@ export default function SettingsScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.logoRow}>
-          <Logo size={64} />
+        <View style={styles.introRow}>
+          <Logo size={44} />
+          <View style={styles.introCopy}>
+            <Text style={styles.introTitle}>Institution details</Text>
+            <Text style={styles.introSub}>Printed at the top of every Excel register.</Text>
+          </View>
         </View>
 
         <Card accent="cardTeal" style={styles.card}>
-          <Text style={styles.sectionTitle}>🏫 School / Institution</Text>
+          <Text style={styles.sectionTitle}>School or department</Text>
           <Text style={styles.sectionDesc}>
-            This name appears at the top of every Excel attendance register
-            you export — in place of a generic department title. Set it once
-            and every export from now on will use it automatically.
+            Use your institution or department name.
           </Text>
           <InputField
             label="School or Department Name"
@@ -68,7 +70,7 @@ export default function SettingsScreen() {
             placeholder="e.g. Greenwood High School"
           />
           <PrimaryBtn
-            label="💾 Save School Name"
+            label="Save institution name"
             onPress={handleSave}
             loading={saving}
             style={{ marginTop: SIZES.sm }}
@@ -76,7 +78,7 @@ export default function SettingsScreen() {
         </Card>
 
         <Card style={styles.previewCard}>
-          <Text style={styles.previewLabel}>Preview — Excel register header</Text>
+          <Text style={styles.previewLabel}>EXCEL HEADING</Text>
           <View style={styles.previewBox}>
             <Text style={styles.previewTitle} numberOfLines={1}>
               {schoolName.trim() || 'My School'}
@@ -98,10 +100,10 @@ const styles = StyleSheet.create({
     paddingTop: SIZES.lg,
     paddingBottom: SIZES.xxxl,
   },
-  logoRow: {
-    alignItems: 'center',
-    marginBottom: SIZES.xl,
-  },
+  introRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 18 },
+  introCopy: { marginLeft: 12, flex: 1 },
+  introTitle: { fontSize: 19, fontWeight: '800', color: COLORS.textPrimary },
+  introSub: { fontSize: 13, color: COLORS.textSecondary, marginTop: 4 },
   card: { padding: SIZES.lg },
   sectionTitle: {
     fontSize: FONTS.sizes.md,
@@ -112,11 +114,11 @@ const styles = StyleSheet.create({
   sectionDesc: {
     fontSize: FONTS.sizes.sm,
     color: COLORS.textSecondary,
-    lineHeight: 20,
+    lineHeight: 21,
     marginBottom: SIZES.lg,
   },
   previewCard: {
-    backgroundColor: '#fafafa',
+    backgroundColor: '#FFFFFF',
   },
   previewLabel: {
     fontSize: FONTS.sizes.xs,

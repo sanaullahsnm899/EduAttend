@@ -1,18 +1,20 @@
+import { Text } from '../src/components/Typography';
 // FILE: app/backup.js
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { File } from 'expo-file-system';
 import { useApp } from '../src/context/AppContext';
 import { Header, PrimaryBtn, Card } from '../src/components/UI';
-import { exportBackupJSON, exportAllXLSX } from '../src/utils/xlsxExport';
+import { exportAllXLSX } from '../src/utils/xlsxExport';
+import { exportBackupXLSX, readBackupBase64 } from '../src/utils/workbookBackup';
 import { COLORS, SIZES, FONTS } from '../src/utils/theme';
 
 export default function BackupScreen() {
@@ -20,16 +22,16 @@ export default function BackupScreen() {
   const { classes, students, attendance, editHistory, settings, updateSettings, restoreData, clearAll } = useApp();
 
   const [exporting, setExporting] = useState(false);
-  const [exportingCSV, setExportingCSV] = useState(false);
+  const [exportingXLSX, setExportingCSV] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [clearing, setClearing] = useState(false);
 
   async function handleDownloadBackup() {
     setExporting(true);
     try {
-      await exportBackupJSON(classes, students, attendance, editHistory, settings);
+      await exportBackupXLSX(classes, students, attendance, editHistory, settings);
     } catch (e) {
-      Alert.alert('Export Error', e.message || 'Failed to export backup.');
+      Alert.alert('Export Error', e.message || 'Failed to export Excel backup.');
     } finally {
       setExporting(false);
     }
@@ -37,105 +39,43 @@ export default function BackupScreen() {
 
   async function handleRestoreBackup() {
     try {
-      // File.pickFileAsync (the modern expo-file-system API) opens the
-      // system picker and returns a real File instance backed by the
-      // current native bridge. Unlike expo-document-picker's URI +
-      // expo-file-system/legacy readAsStringAsync combo, this avoids the
-      // known Android bug where cache-copied content:// URIs are
-      // intermittently "not readable" by the legacy bridge — File.text()
-      const pickResult = await File.pickFileAsync({
-        mimeTypes: ['application/json', '*/*'],
+      const result = await File.pickFileAsync({
+        mimeTypes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
       });
-
-      if (pickResult.canceled || !pickResult.result) {
+      if (result.canceled || !result.result) return;
+      const file = result.result;
+      if (file.size && file.size > 20 * 1024 * 1024) {
+        Alert.alert('File Too Large', 'Select an Excel backup smaller than 20 MB.');
         return;
       }
-
-      const file = pickResult.result;
-
-      // Validate it looks like a JSON file by extension (mimeTypes above
-      // already narrows the system picker, but Android file providers
-      // don't always report a clean mimeType, so we also check the URI).
-      const looksLikeJSON = (file.uri || '').toLowerCase().endsWith('.json');
-
       setRestoring(true);
-
-      let content;
-      try {
-        content = await file.text();
-      } catch (readErr) {
-        Alert.alert(
-          'Read Error',
-          'Could not read the selected file: ' + (readErr.message || 'unknown error')
-        );
-        setRestoring(false);
-        return;
-      }
-
-      if (!content) {
-        Alert.alert(
-          'Read Error',
-          'The selected file appears to be empty or unreadable. Please try a different file.'
-        );
-        setRestoring(false);
-        return;
-      }
-
-      let data;
-      try {
-        data = JSON.parse(content);
-      } catch (parseErr) {
-        Alert.alert(
-          'Invalid File',
-          looksLikeJSON
-            ? 'This .json file could not be parsed. It may be corrupted.'
-            : 'The selected file is not valid JSON. Please select a proper EduAttend backup file.'
-        );
-        setRestoring(false);
-        return;
-      }
-
-      if (!data.classes || !data.students) {
-        Alert.alert(
-          'Invalid Backup',
-          'This file does not appear to be an EduAttend backup. Missing required fields (classes / students).'
-        );
-        setRestoring(false);
-        return;
-      }
-
+      const base64 = await file.base64();
+      const data = readBackupBase64(base64);
       Alert.alert(
-        'Confirm Restore',
-        `This will replace ALL current data with the backup.\nThis action cannot be undone.\n\nBackup contains:\n• ${data.classes.length} classes\n• ${data.students.length} students\n• ${Object.keys(data.attendance || {}).length} attendance records`,
+        'Restore Excel Backup?',
+        `This will replace ALL saved records with the selected workbook.\n\n${data.classes.length} classes · ${data.students.length} students · ${Object.keys(data.attendance).length} attendance sessions\n\nExport a backup of your current data first.`,
         [
+          { text: 'Cancel', style: 'cancel', onPress: () => setRestoring(false) },
           {
-            text: 'Cancel',
-            style: 'cancel',
-            onPress: () => setRestoring(false),
-          },
-          {
-            text: 'Restore',
-            style: 'destructive',
+            text: 'Restore Data', style: 'destructive',
             onPress: async () => {
               try {
                 await restoreData(data);
-                Alert.alert('✅ Success', 'Backup restored successfully!');
+                Alert.alert('Restored', 'Your Excel backup is now saved as local CSV files.');
               } catch (e) {
-                Alert.alert('Restore Error', 'Failed to restore data: ' + e.message);
-              } finally {
-                setRestoring(false);
-              }
+                Alert.alert('Restore Failed', e.message || 'Could not save the restored files.');
+              } finally { setRestoring(false); }
             },
           },
         ]
       );
     } catch (e) {
-      Alert.alert('Error', 'Could not open file picker: ' + e.message);
+      Alert.alert('Invalid Backup', e.message || 'Could not read that Excel backup file.');
       setRestoring(false);
     }
   }
 
-  async function handleExportAllCSV() {
+  async function handleExportAllXLSX() {
     setExportingCSV(true);
     try {
       await exportAllXLSX(classes, students, attendance, settings.schoolName);
@@ -158,7 +98,7 @@ export default function BackupScreen() {
           onPress: () => {
             Alert.alert(
               'Final Confirmation',
-              'Are you absolutely sure? All data will be lost forever.',
+              'Are you absolutely sure? All data will be deleted.',
               [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -202,7 +142,7 @@ export default function BackupScreen() {
       >
         {/* Data Summary */}
         <Card style={styles.summaryCard} accent="cardTeal">
-          <Text style={styles.sectionTitle}>📦 Current Data Summary</Text>
+          <Text style={styles.sectionTitle}>Your data at a glance</Text>
           <View style={styles.summaryGrid}>
             <View style={styles.summaryItem}>
               <Text style={[styles.summaryVal, { color: COLORS.primary }]}>
@@ -231,13 +171,18 @@ export default function BackupScreen() {
           </View>
         </Card>
 
+        <View style={styles.csvNote}>
+          <Text style={styles.csvNoteTitle}>Saved as CSV · Ready for Excel</Text>
+          <Text style={styles.csvNoteBody}>Edits are stored on this device as separate CSV files. Backups and attendance reports use XLSX.</Text>
+        </View>
+
         {/* Settings shortcut */}
         <TouchableOpacity
           style={styles.settingsShortcut}
           onPress={() => router.push('/settings')}
           activeOpacity={0.8}
         >
-          <Text style={styles.settingsShortcutIcon}>🏫</Text>
+          <Ionicons name="school-outline" size={22} color={COLORS.primaryDark} style={{marginRight:12}}/>
           <View style={{ flex: 1 }}>
             <Text style={styles.settingsShortcutTitle}>School Name</Text>
             <Text style={styles.settingsShortcutValue} numberOfLines={1}>
@@ -249,15 +194,14 @@ export default function BackupScreen() {
 
         {/* Backup Section */}
         <View style={styles.actionSection}>
-          <Text style={styles.sectionHeader}>💾 BACKUP</Text>
+          <Text style={styles.sectionHeader}>BACKUP · EXCEL</Text>
           <Card style={styles.actionCard} accent="cardTeal">
-            <Text style={styles.actionTitle}>⬇ Download Backup (.json)</Text>
+            <Text style={styles.actionTitle}>Download backup (.xlsx)</Text>
             <Text style={styles.actionDesc}>
-              Export all your data as a JSON file. Save it somewhere safe — you
-              can restore it any time from this screen.
+              Save classes, students, attendance, edit history and settings in one Excel workbook. Keep a copy in Downloads or Drive.
             </Text>
             <PrimaryBtn
-              label="⬇ Download Backup (.json)"
+              label="Download backup (.xlsx)"
               onPress={handleDownloadBackup}
               loading={exporting}
               style={{ marginTop: SIZES.sm }}
@@ -267,22 +211,20 @@ export default function BackupScreen() {
 
         {/* Restore Section */}
         <View style={styles.actionSection}>
-          <Text style={styles.sectionHeader}>⬆ RESTORE</Text>
+          <Text style={styles.sectionHeader}>RESTORE · EXCEL</Text>
           <Card style={styles.actionCard} accent="cardBlue">
-            <Text style={styles.actionTitle}>⬆ Restore from Backup</Text>
+            <Text style={styles.actionTitle}>Restore Excel backup</Text>
             <Text style={styles.actionDesc}>
-              Select a previously exported EduAttend <Text style={styles.bold}>.json</Text> backup
-              file. Browse to where you saved it (Downloads, Drive, etc.).
-              Your current data will be fully replaced.
+              Choose an EduAttend <Text style={styles.bold}>.xlsx</Text> backup from your files or Drive. Your current records will be replaced after confirmation.
             </Text>
             <View style={styles.tipBox}>
               <Text style={styles.tipText}>
-                💡 Tip: If you shared the file to Google Drive, tap Drive in the
-                file picker. If you saved to Downloads, tap the ☰ menu → Downloads.
+                Tip: If you shared the file to Google Drive, tap Drive in the
+                file picker. If you saved to Downloads, tap the menu → Downloads.
               </Text>
             </View>
             <PrimaryBtn
-              label="⬆ Restore from Backup"
+              label="Restore Excel backup"
               onPress={handleRestoreBackup}
               loading={restoring}
               color={COLORS.secondary}
@@ -293,9 +235,9 @@ export default function BackupScreen() {
 
         {/* Export Excel Section */}
         <View style={styles.actionSection}>
-          <Text style={styles.sectionHeader}>📤 EXPORT</Text>
+          <Text style={styles.sectionHeader}>EXPORT</Text>
           <Card style={styles.actionCard} accent="cardGold">
-            <Text style={styles.actionTitle}>📋 Export All Classes (Excel)</Text>
+            <Text style={styles.actionTitle}>Export all classes (Excel)</Text>
             <Text style={styles.actionDesc}>
               Export a complete attendance register for all classes and all
               dates as a single .xlsx file — one sheet per class, formatted
@@ -303,9 +245,9 @@ export default function BackupScreen() {
               Att / Att% formulas.
             </Text>
             <PrimaryBtn
-              label="📋 Export All Classes (Excel)"
-              onPress={handleExportAllCSV}
-              loading={exportingCSV}
+              label="Export all classes (Excel)"
+              onPress={handleExportAllXLSX}
+              loading={exportingXLSX}
               color="#444"
               style={{ marginTop: SIZES.sm }}
             />
@@ -315,16 +257,15 @@ export default function BackupScreen() {
         {/* Danger Zone */}
         <View style={styles.actionSection}>
           <Text style={[styles.sectionHeader, { color: COLORS.danger }]}>
-            ⚠️ DANGER ZONE
+            DANGER ZONE
           </Text>
           <Card style={[styles.actionCard, styles.dangerCard]} accent="cardRose">
-            <Text style={styles.actionTitle}>🗑️ Clear All Data</Text>
+            <Text style={styles.actionTitle}>Clear all data</Text>
             <Text style={styles.actionDesc}>
-              Permanently delete all classes, students, attendance records, and
-              edit history. Download a backup first if needed.
+              Permanently remove local CSV records. Download an Excel backup first if needed.
             </Text>
             <PrimaryBtn
-              label="🗑️ Clear All Data"
+              label="Clear all data"
               onPress={handleClearAll}
               loading={clearing}
               color={COLORS.danger}
@@ -340,6 +281,9 @@ export default function BackupScreen() {
 }
 
 const styles = StyleSheet.create({
+  csvNote: { backgroundColor: '#E7F6F1', borderWidth: 1, borderColor: '#C8EBE0', borderRadius: 16, padding: 16, marginBottom: 16 },
+  csvNoteTitle: { fontSize: 14, fontWeight: '800', color: '#086C57', marginBottom: 5 },
+  csvNoteBody: { fontSize: 12, lineHeight: 19, color: '#466E67' },
   root: { flex: 1, backgroundColor: COLORS.background },
   scroll: { flex: 1 },
   scrollContent: {
@@ -372,7 +316,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   summaryLabel: {
-    fontSize: FONTS.sizes.xs,
+    fontSize: 13,
     color: COLORS.textSecondary,
     marginTop: 2,
   },
@@ -428,16 +372,16 @@ const styles = StyleSheet.create({
     marginBottom: SIZES.lg,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.025,
+    shadowRadius: 12,
+    elevation: 1,
   },
   settingsShortcutIcon: {
     fontSize: 22,
     marginRight: SIZES.md,
   },
   settingsShortcutTitle: {
-    fontSize: FONTS.sizes.xs,
+    fontSize: 13,
     color: COLORS.textSecondary,
     fontWeight: '600',
     textTransform: 'uppercase',

@@ -1,300 +1,53 @@
-// FILE: app/index.js
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Platform,
-} from 'react-native';
+import { View, ScrollView, TouchableOpacity, StyleSheet, Platform, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Text } from '../src/components/Typography';
+import { Logo, BottomNav } from '../src/components/UI';
 import { useApp } from '../src/context/AppContext';
-import { Logo, FadeInUp } from '../src/components/UI';
-import { COLORS, SIZES, FONTS, GRADIENTS } from '../src/utils/theme';
+import { COLORS as C } from '../src/utils/theme';
+import { localDateKey } from '../src/utils/dates';
 
-export default function HomeScreen() {
-  const router = useRouter();
-  const { classes, students, todayAttCount, settings } = useApp();
-
-  const navCards = [
-    {
-      icon: '🏫',
-      label: 'Classes',
-      subtitle: 'Manage your class sections',
-      route: '/classes',
-      gradient: GRADIENTS.cardTeal,
-    },
-    {
-      icon: '👨‍🎓',
-      label: 'Students',
-      subtitle: 'View and manage students',
-      route: '/students',
-      gradient: GRADIENTS.cardBlue,
-    },
-    {
-      icon: '✅',
-      label: 'Take Attendance',
-      subtitle: "Mark today's attendance",
-      route: '/attendance',
-      gradient: GRADIENTS.cardTeal,
-    },
-    {
-      icon: '📊',
-      label: 'Reports',
-      subtitle: 'Attendance summary & analytics',
-      route: '/reports',
-      gradient: GRADIENTS.cardGold,
-    },
-    {
-      icon: '💾',
-      label: 'Backup / Restore',
-      subtitle: 'Export, import, and manage data',
-      route: '/backup',
-      gradient: GRADIENTS.cardRose,
-    },
-  ];
-
-  return (
-    <View style={styles.root}>
-      {/* Header */}
-      <LinearGradient
-        colors={GRADIENTS.brand}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <View style={styles.headerTop}>
-          <Logo size={52} />
-          <View style={styles.headerTitles}>
-            <Text style={styles.appName}>EduAttend</Text>
-            <Text style={styles.appTagline} numberOfLines={1}>
-              {settings.schoolName || 'Attendance Manager'}
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.settingsBtn}
-            onPress={() => router.push('/settings')}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Text style={styles.settingsIcon}>⚙️</Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Stats Row */}
-        <FadeInUp delay={0}>
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: COLORS.primary }]}>
-                {classes.length}
-              </Text>
-              <Text style={styles.statLabel}>Classes</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: COLORS.secondary }]}>
-                {students.length}
-              </Text>
-              <Text style={styles.statLabel}>Students</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: COLORS.success }]}>
-                {todayAttCount}
-              </Text>
-              <Text style={styles.statLabel}>Today's Att.</Text>
-            </View>
-          </View>
-        </FadeInUp>
-
-        {/* Nav Cards */}
-        <Text style={styles.sectionTitle}>Quick Access</Text>
-        {navCards.map((card, idx) => (
-          <FadeInUp key={card.route} delay={60 + idx * 50}>
-            <TouchableOpacity
-              onPress={() => router.push(card.route)}
-              activeOpacity={0.85}
-              style={styles.navCardWrap}
-            >
-              <View style={styles.navCard}>
-                <LinearGradient
-                  colors={card.gradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={styles.navAccent}
-                />
-                <View style={styles.navIconWrap}>
-                  <Text style={styles.navIcon}>{card.icon}</Text>
-                </View>
-                <View style={styles.navInfo}>
-                  <Text style={styles.navLabel}>{card.label}</Text>
-                  <Text style={styles.navSub}>{card.subtitle}</Text>
-                </View>
-                <Text style={styles.navArrow}>›</Text>
-              </View>
-            </TouchableOpacity>
-          </FadeInUp>
-        ))}
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>EduAttend v1.0 • Built for Teachers</Text>
-        </View>
-      </ScrollView>
-    </View>
-  );
+const links = [
+  { title:'Classes',sub:'Sections & teachers',route:'/classes',icon:'grid-outline',ink:'#107C65',bg:'#E4F6EE' },
+  { title:'Students',sub:'Class directories',route:'/students',icon:'people-outline',ink:'#2566AC',bg:'#EAF2FF' },
+  { title:'Reports',sub:'Review & export',route:'/reports',icon:'bar-chart-outline',ink:'#AE7928',bg:'#FFF2DC' },
+  { title:'Backup',sub:'CSV & Excel',route:'/backup',icon:'cloud-download-outline',ink:'#995985',bg:'#FAECF5' },
+];
+const dateText = key => new Date(`${key}T12:00:00`).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'});
+function weekKeys(today){const d=new Date(`${today}T12:00:00`),offset=(d.getDay()+6)%7;d.setDate(d.getDate()-offset);return Array.from({length:7},(_,i)=>{const t=new Date(d);t.setDate(t.getDate()+i);return {key:`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`,day:['M','T','W','T','F','S','S'][i],date:t.getDate()};});}
+export default function HomeScreen(){
+  const router=useRouter(), insets=useSafeAreaInsets();
+  const {classes,students,attendance,settings}=useApp();
+  const today=localDateKey();const keys=Object.keys(attendance);
+  const todayKeys=keys.filter(k=>k.startsWith(`${today}_`));
+  const totals=todayKeys.reduce((acc,k)=>{Object.values(attendance[k]||{}).forEach(s=>{if(s==='P')acc.p++;if(s==='A')acc.a++;if(s==='L')acc.l++;});return acc;},{p:0,a:0,l:0});
+  const progress=classes.length?Math.min(100,Math.round(todayKeys.length/classes.length*100)):0;
+  const daysWithData=new Set(keys.map(k=>k.slice(0,10)));
+  const recent=keys.slice().sort().reverse().slice(0,2).map(key=>{const i=key.lastIndexOf('_'),date=key.slice(0,i),classId=Number(key.slice(i+1));return {key,date,classId,name:classes.find(c=>c.id===classId)?.name||'Class',count:Object.keys(attendance[key]||{}).length};});
+  const top=Math.max(insets.top,Platform.OS==='android'?(StatusBar.currentHeight||24):24);
+  return <View style={styles.root}>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom:22}}>
+      <View style={[styles.hero,{paddingTop:top+10}]}>
+        <View style={styles.brandRow}><Logo size={35}/><View style={{flex:1,marginLeft:11}}><Text style={styles.brand}>eduattend<Text style={{color:'#57DFC1'}}>.</Text></Text><Text style={styles.brandSub}>TEACHER WORKSPACE</Text></View><TouchableOpacity accessibilityRole="button" accessibilityLabel="Settings" style={styles.settings} onPress={()=>router.push('/settings')}><Ionicons name="settings-outline" size={21} color="#FFFFFF"/></TouchableOpacity></View>
+        <Text style={styles.greeting}>{dateText(today)} · {settings.schoolName||'Your institution'}</Text>
+        <Text style={styles.heroTitle}>Your attendance, simplified.</Text>
+        <Text style={styles.heroDetail}>Ready for today's classes.</Text>
+      </View>
+      <View style={styles.content}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Take attendance" activeOpacity={.85} style={styles.quickAction} onPress={()=>router.push('/attendance')}><View style={styles.quickIcon}><Ionicons name="checkmark-done" color="#fff" size={24}/></View><View style={{flex:1}}><Text style={styles.quickTitle}>Take attendance</Text><Text style={styles.quickSubtitle}>Open today's register</Text></View><Ionicons name="arrow-forward" size={20} color="#fff"/></TouchableOpacity>
+        <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Today's overview</Text><Text style={styles.sectionRight}>{classes.length} {classes.length===1?'CLASS':'CLASSES'}</Text></View>
+        <View style={styles.progressCard}><View style={styles.progressTop}><View><Text style={styles.progressNumber}>{todayKeys.length} <Text style={styles.progressSlash}>/ {classes.length} saved</Text></Text><Text style={styles.progressNote}>{classes.length===0?'Add a class to get started':todayKeys.length>=classes.length?'All registers saved today':`${classes.length-todayKeys.length} still to mark`}</Text></View><Text style={styles.progressPct}>{progress}%</Text></View><View style={styles.track}><View style={[styles.fill,{width:`${progress}%`}]}/></View></View>
+        <View style={styles.stats}>{[{v:totals.p,label:'Present',ink:C.presentBg,bg:'#E3F5EE',icon:'checkmark-circle'},{v:totals.a,label:'Absent',ink:C.absentBg,bg:'#FDEBF0',icon:'close-circle'},{v:totals.l,label:'Leave',ink:'#AA771B',bg:'#FFF3DF',icon:'remove-circle'}].map(s=><View key={s.label} style={styles.stat}><View style={[styles.statIcon,{backgroundColor:s.bg}]}><Ionicons name={s.icon} color={s.ink} size={18}/></View><Text style={styles.statVal}>{s.v}</Text><Text style={styles.statLabel}>{s.label}</Text></View>)}</View>
+        <View style={styles.sectionRow}><Text style={styles.sectionTitle}>This week</Text><Text style={styles.sectionRight}>SAVED DAYS</Text></View>
+        <View style={styles.week}>{weekKeys(today).map(d=>{const isToday=d.key===today,saved=daysWithData.has(d.key);return <View key={d.key} style={[styles.day,isToday&&styles.today]}><Text style={[styles.dayLabel,isToday&&{color:'#D6F7EA'}]}>{d.day}</Text><Text style={[styles.dayDate,isToday&&{color:'#fff'}]}>{d.date}</Text><View style={[styles.dot,saved&&{backgroundColor:isToday?'#B8FCE2':C.primary},!saved&&isToday&&{backgroundColor:'#ffffff60'}]}/></View>})}</View>
+        <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Workspace</Text><Text style={styles.sectionRight}>QUICK ACCESS</Text></View>
+        <View style={styles.links}>{links.map(link=><TouchableOpacity accessibilityRole="button" accessibilityLabel={link.title} key={link.route} style={styles.link} onPress={()=>router.push(link.route)}><View style={[styles.linkIcon,{backgroundColor:link.bg}]}><Ionicons name={link.icon} size={20} color={link.ink}/></View><View style={{flex:1}}><Text style={styles.linkTitle}>{link.title}</Text><Text style={styles.linkSub}>{link.sub}</Text></View><Ionicons name="chevron-forward" size={17} color="#8CA49A"/></TouchableOpacity>)}</View>
+        <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Recent registers</Text><TouchableOpacity accessibilityRole="button" onPress={()=>router.push('/reports')}><Text style={styles.viewAll}>View reports <Ionicons name="arrow-forward" size={13}/></Text></TouchableOpacity></View>
+        <View style={styles.recent}>{recent.length===0?<Text style={styles.recentEmpty}>Your saved registers will appear here.</Text>:recent.map((r,i)=><TouchableOpacity key={r.key} accessibilityRole="button" onPress={()=>router.push({pathname:'/reports',params:{classId:r.classId,date:r.date}})} style={[styles.recentRow,i>0&&{borderTopWidth:1,borderTopColor:C.border}]}><View style={styles.recentIcon}><Ionicons name="checkmark" color={C.primaryDark} size={20}/></View><View style={{flex:1}}><Text style={styles.recentTitle} numberOfLines={1}>{r.name}</Text><Text style={styles.recentMeta}>{dateText(r.date)} · {r.count} students</Text></View><Ionicons name="chevron-forward" size={18} color={C.textSecondary}/></TouchableOpacity>)}</View>
+      </View>
+    </ScrollView><BottomNav active="/"/>
+  </View>;
 }
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  header: {
-    paddingTop: Platform.OS === 'android' ? 44 : 54,
-    paddingBottom: SIZES.xxl,
-    paddingHorizontal: SIZES.lg,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerTitles: {
-    flex: 1,
-    marginLeft: SIZES.md,
-  },
-  appName: {
-    color: '#fff',
-    fontSize: FONTS.sizes.xxl,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  appTagline: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: FONTS.sizes.xs,
-    marginTop: 2,
-  },
-  settingsBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  settingsIcon: {
-    fontSize: 18,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: SIZES.lg,
-    paddingTop: SIZES.lg,
-    paddingBottom: SIZES.xxxl,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.card,
-    borderRadius: SIZES.radius,
-    paddingVertical: SIZES.lg,
-    marginBottom: SIZES.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  statCard: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: SIZES.sm,
-  },
-  statValue: {
-    fontSize: FONTS.sizes.xxxl,
-    fontWeight: '900',
-  },
-  statLabel: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  sectionTitle: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: SIZES.md,
-  },
-  navCardWrap: {
-    marginBottom: SIZES.sm,
-    borderRadius: SIZES.radius,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  navCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: SIZES.radius,
-    paddingVertical: SIZES.lg,
-    paddingHorizontal: SIZES.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  navAccent: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    width: 5,
-  },
-  navIconWrap: {
-    marginRight: SIZES.md,
-  },
-  navIcon: {
-    fontSize: 28,
-  },
-  navInfo: {
-    flex: 1,
-  },
-  navLabel: {
-    fontSize: FONTS.sizes.md,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 2,
-  },
-  navSub: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-  },
-  navArrow: {
-    fontSize: 26,
-    color: COLORS.textSecondary,
-    fontWeight: '300',
-  },
-  footer: {
-    alignItems: 'center',
-    marginTop: SIZES.xl,
-    paddingTop: SIZES.lg,
-  },
-  footerText: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-  },
-});
+const styles=StyleSheet.create({root:{flex:1,backgroundColor:C.background},hero:{backgroundColor:C.primaryDark,paddingHorizontal:19,paddingBottom:24,borderBottomLeftRadius:22,borderBottomRightRadius:22},brandRow:{flexDirection:'row',alignItems:'center'},brand:{fontSize:19,fontWeight:'700',color:'#fff',letterSpacing:-.5},brandSub:{fontSize:9,fontWeight:'600',color:'#B8DDCF',letterSpacing:1,marginTop:1},settings:{height:40,width:40,alignItems:'center',justifyContent:'center',borderRadius:12,backgroundColor:'#FFFFFF19'},greeting:{color:'#C9E6DA',fontSize:12,marginTop:18},heroTitle:{fontSize:25,color:'#fff',fontWeight:'700',marginTop:4,letterSpacing:-.8},heroDetail:{color:'#BFE8D9',fontSize:12,marginTop:4},content:{paddingHorizontal:16,marginTop:-2},quickAction:{backgroundColor:C.primary,marginTop:15,marginBottom:13,padding:13,borderRadius:16,flexDirection:'row',alignItems:'center',gap:12},quickIcon:{width:43,height:43,backgroundColor:'#FFFFFF20',borderRadius:12,alignItems:'center',justifyContent:'center'},quickTitle:{color:'#fff',fontSize:15,fontWeight:'700'},quickSubtitle:{color:'#DBF7EE',fontSize:12,marginTop:3},sectionRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginTop:14,marginBottom:10},sectionTitle:{fontWeight:'700',fontSize:16,color:C.textPrimary},sectionRight:{fontSize:10,fontWeight:'600',letterSpacing:.6,color:C.textSecondary},progressCard:{padding:14,backgroundColor:'#fff',borderRadius:15,borderWidth:1,borderColor:C.border},progressTop:{flexDirection:'row',justifyContent:'space-between',alignItems:'center'},progressNumber:{fontSize:21,fontWeight:'700',color:C.textPrimary},progressSlash:{fontSize:13,fontWeight:'500',color:C.textSecondary},progressPct:{fontSize:19,fontWeight:'700',color:C.primaryDark},progressNote:{fontSize:12,color:C.textSecondary,marginTop:2},track:{height:6,borderRadius:3,backgroundColor:'#E2EFE8',marginTop:14,overflow:'hidden'},fill:{height:'100%',borderRadius:3,backgroundColor:C.primary},stats:{flexDirection:'row',gap:8,marginTop:9},stat:{flex:1,borderRadius:13,paddingHorizontal:12,paddingVertical:10,borderWidth:1,borderColor:C.border,backgroundColor:'#fff'},statIcon:{width:29,height:29,alignItems:'center',justifyContent:'center',borderRadius:9},statVal:{color:C.textPrimary,fontSize:23,fontWeight:'700',marginTop:6},statLabel:{fontSize:11,color:C.textSecondary,marginTop:1},week:{flexDirection:'row',backgroundColor:'#fff',borderRadius:14,borderWidth:1,borderColor:C.border,padding:6,justifyContent:'space-between'},day:{flex:1,alignItems:'center',paddingVertical:9,borderRadius:10},today:{backgroundColor:C.primary},dayLabel:{fontSize:11,fontWeight:'600',color:C.textSecondary},dayDate:{fontSize:14,fontWeight:'600',color:C.textPrimary,marginTop:7},dot:{width:4,height:4,backgroundColor:'transparent',borderRadius:2,marginTop:7},links:{flexDirection:'row',flexWrap:'wrap',gap:9},link:{backgroundColor:'#fff',width:'48.5%',borderColor:C.border,borderWidth:1,borderRadius:14,padding:11,minHeight:115},linkIcon:{width:36,height:36,borderRadius:11,alignItems:'center',justifyContent:'center',marginBottom:10},linkTitle:{fontWeight:'700',fontSize:14,color:C.textPrimary},linkSub:{fontSize:11,color:C.textSecondary,marginTop:3},recent:{borderRadius:14,backgroundColor:'#fff',borderWidth:1,borderColor:C.border,overflow:'hidden'},recentRow:{padding:11,flexDirection:'row',alignItems:'center',gap:11},recentIcon:{width:35,height:35,backgroundColor:C.primaryLight,borderRadius:10,alignItems:'center',justifyContent:'center'},recentTitle:{fontSize:13,fontWeight:'600',color:C.textPrimary},recentMeta:{fontSize:11,color:C.textSecondary,marginTop:3},recentEmpty:{padding:16,color:C.textSecondary,fontSize:12},viewAll:{fontSize:12,color:C.primaryDark,fontWeight:'600'}});

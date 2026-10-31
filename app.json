@@ -25,17 +25,23 @@
           "imageWidth": 200,
           "backgroundColor": "#085041"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "scheme": "eduattend",
     "web": {
       "bundler": "metro"
     },
     "extra": {
-      "router": {},
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
       "eas": {
-        "projectId": "b94b516e-1f48-4b81-bd29-5ed674259b9b"
+        "projectId": "df576eaf-8b6f-4f67-bee1-ec9de91fe7f4"
       }
-    }
+    },
+    "owner": "newtech313"
   }
 }

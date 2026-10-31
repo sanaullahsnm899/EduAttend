@@ -1,281 +1,119 @@
-<div align="center">
-
-<img src="assets/icon.png" width="120" height="120" style="border-radius: 24px;" />
-
 # EduAttend
 
-### University Attendance Management App for Android
+**An elegant, offline-first attendance workspace for teachers.**
 
-[![Expo](https://img.shields.io/badge/Expo-SDK%2056-000020?logo=expo&logoColor=white)](https://expo.dev)
-[![React Native](https://img.shields.io/badge/React%20Native-0.83-61DAFB?logo=react&logoColor=white)](https://reactnative.dev)
-[![Platform](https://img.shields.io/badge/Platform-Android-3DDC84?logo=android&logoColor=white)](https://android.com)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+EduAttend is an Expo / React Native app for managing classes, students, attendance, attendance reports and local Excel backups. This edition refreshes the interface and replaces the old JSON-based application storage with a real CSV database saved on the device. The existing feature set is intentionally retained.
 
-A professional mobile attendance app built for university teachers.  
-Manage classes, students, and daily attendance — fully offline, with Excel export.
+## What's changed
 
-[Features](#features) • [Screenshots](#screenshots) • [Tech Stack](#tech-stack) • [Getting Started](#getting-started) • [Build APK](#build-apk)
+| Area | Upgraded behavior |
+| --- | --- |
+| Home | Dark-jade welcome panel, clean statistics, one prominent **Take attendance** button, streamlined workspace cards |
+| Appearance | Unified colors, softer cards, readable type, consistent input controls, P/A/L colors |
+| Attendance | Easier navigation, **Use today's date** shortcut, input validation, clear statuses and edit workflow |
+| Persistence | **Five actual CSV files** in the app's Documents directory — no JSON for everyday data storage |
+| Backups | **Download .xlsx** with six tabs (Read Me, Classes, Students, Attendance, Edit History, Settings) and **restore .xlsx** with confirmation |
+| Reports | Existing teacher/class Excel registers preserved, including Excel attendance calculations |
+| Upgrades | Existing AsyncStorage records are migrated to CSV on the first launch, after which the original legacy keys are removed |
 
-</div>
+## Screens
 
----
+- **Classes** — create, edit and remove class sections and assign teachers.
+- **Students** — add, update, filter and remove student records.
+- **Attendance** — mark P (present), A (absent), L (leave), save by date and class, edit a saved register with a change log.
+- **Reports** — review attendance for a chosen class/date and export a formatted Excel register.
+- **Backup / Restore** — export/share a complete `.xlsx` backup, restore a previously exported `.xlsx`, export all class attendance registers, clear attendance data.
+- **Settings** — change the displayed school name.
 
-## Features
+There is no account, cloud server or internet dependency for everyday operation.
 
-### 📋 Attendance Management
-- Mark students **Present / Absent / Leave** with one tap
-- Default status: Absent (A) — tap to change
-- P/A/L buttons with satisfying spring animations
-- Auto-saves per class per date
+## Run locally
 
-### ✏️ Edit Mode with Audit Log
-- Locked buttons prevent accidental changes after saving
-- **Edit Mode** unlocks corrections with visual amber highlight
-- Every change is logged with student name, old status → new status, and timestamp
-- Last 20 edits visible per attendance session
-
-### 🏫 Class Management
-- Add, edit, and delete class sections
-- Per-class: teacher name, date range, student count
-- Quick shortcuts to Take Attendance and Reports from every class card
-
-### 👨‍🎓 Student Management
-- Filter students by class
-- Student profiles: name, registration number, class, gender, date of admission
-- Initials avatar with gender-based color coding
-
-### 📊 Reports
-- Filter by class + date
-- Stats boxes: Present count, Absent count, Leave count with percentages
-- Per-student colored status badges
-- Direct "Take Attendance" shortcut for dates with no record
-
-### 📁 Excel Export (.xlsx)
-- Full attendance register matching the official printed format
-- Multi-row header: **MONTH / DATE / LEC** rows
-- Live Excel formulas: `Att = COUNTIF(...)`, `Att% = ROUND(...)`
-- Bold headers, Arial 8pt fonts, thin borders on every cell
-- Exports per-class or all classes in one workbook (one sheet per class)
-
-### 💾 Backup & Restore
-- JSON backup includes classes, students, attendance, edit history, and settings
-- Restore via native file picker — uses `expo-file-system`'s modern `File.pickFileAsync()` + `.text()` API (bypasses the known Android content-URI legacy bridge bug)
-- Double-confirm Clear All Data
-
-### ⚙️ Settings
-- Set your **school / department name** — appears at the top of every exported Excel register instead of a generic department title
-- Persists across restarts, survives "Clear All Data"
-
-### 🎨 Professional Design
-- Teal-to-emerald gradient headers and buttons
-- Animated staggered card entrances on all list screens
-- Spring-bounce animation on attendance button selection
-- Circular icon backdrop on empty states
-- Actionable empty states with CTA buttons (no dead ends)
-- Clipboard-with-checkmark app icon, clean under all Android launcher masks
-
----
-
-## Screenshots
-
-> *(Add screenshots here after first run — `npx expo start --clear` → open in Expo Go → screenshot)*
-
-| Home | Classes | Take Attendance | Reports |
-|------|---------|-----------------|---------|
-| ![Home](docs/home.png) | ![Classes](docs/classes.png) | ![Attendance](docs/attendance.png) | ![Reports](docs/reports.png) |
-
-| Edit Mode | Students | Backup | Settings |
-|-----------|---------|--------|----------|
-| ![Edit](docs/edit.png) | ![Students](docs/students.png) | ![Backup](docs/backup.png) | ![Settings](docs/settings.png) |
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Framework | React Native + Expo SDK 56 |
-| Navigation | expo-router (file-based) |
-| State | React Context API |
-| Storage | @react-native-async-storage/async-storage |
-| File I/O | expo-file-system (legacy + modern `File` API) |
-| Sharing | expo-sharing |
-| File Picker | expo-file-system `File.pickFileAsync()` |
-| Excel Export | xlsx-js-style |
-| Gradients | expo-linear-gradient |
-| Animations | React Native `Animated` API (no third-party) |
-| Styling | StyleSheet only (no external UI libraries) |
-| Icons | Unicode emoji (no icon libraries) |
-
----
-
-## Project Structure
-
-```
-EduAttend/
-├── app/                        # expo-router screens
-│   ├── _layout.js              # Root layout + AppProvider
-│   ├── index.js                # Home screen
-│   ├── classes.js              # Class management
-│   ├── students.js             # Student management
-│   ├── attendance.js           # Take + Edit attendance
-│   ├── reports.js              # Attendance reports
-│   ├── backup.js               # Backup / Restore / Export
-│   └── settings.js             # School name setting
-├── src/
-│   ├── components/
-│   │   └── UI.js               # Shared components:
-│   │                           #   Logo, Header, PrimaryBtn, InputField,
-│   │                           #   Card, FadeInUp, Avatar, AttBtn,
-│   │                           #   StatusBadge, StatBox, EmptyState,
-│   │                           #   Chip, BottomSheetModal, EditHistoryItem,
-│   │                           #   PickerRow
-│   ├── context/
-│   │   └── AppContext.js       # Global state + all CRUD functions
-│   └── utils/
-│       ├── theme.js            # COLORS, GRADIENTS, SIZES, FONTS
-│       ├── storage.js          # AsyncStorage load/save/clear
-│       └── xlsxExport.js       # Excel + JSON backup exporters
-├── assets/
-│   ├── icon.png                # App icon (1024×1024)
-│   ├── adaptive-icon.png       # Android adaptive icon foreground
-│   └── splash-icon.png         # Splash screen icon (SDK 56 API)
-├── app.json                    # Expo config
-└── package.json
-```
-
----
-
-## Data Models
-
-```js
-// Class
-{ id: number, name: string, teacher: string, start: string, end: string }
-
-// Student
-{ id: number, name: string, reg: string, classId: number|null,
-  gender: 'Male'|'Female'|'Other', doa: string }
-
-// Attendance (AsyncStorage key: "YYYY-MM-DD_classId")
-{ [studentId]: 'P' | 'A' | 'L' }
-
-// EditHistory (AsyncStorage key: "YYYY-MM-DD_classId")
-[{ student: string, from: string, to: string, time: string }]
-
-// Settings (AsyncStorage key: "eduattend_settings")
-{ schoolName: string }
-```
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- npm
-- [Expo Go](https://expo.dev/go) on your Android phone (SDK 56 — update to latest)
-
-### Clean Install
+Requirements: **Node.js 22.13+**, npm and an Android device with Expo Go (or emulator). This upgraded source targets **Expo SDK 58**, **React Native 0.88**, **React 19.3** and Expo Router. Node.js **22.13+** is required. Read `UPGRADE_TO_SDK58.md` before installing.
 
 ```bash
-# 1. Clone the repo
-git clone https://github.com/YOUR_USERNAME/EduAttend.git
-cd EduAttend
-
-# 2. Allow Expo's peer dependency resolution (required for expo-router)
-echo "legacy-peer-deps=true" > .npmrc
-
-# 3. Install Expo and the pure-JS libraries
-npm install expo@~56.0.0
-npm install xlsx-js-style
-
-# 4. Let Expo resolve every native module at the correct SDK 56 version
-npx expo install expo-router expo-linking expo-status-bar expo-file-system \
-  expo-sharing expo-document-picker expo-linear-gradient expo-splash-screen \
-  @react-native-async-storage/async-storage react-native-safe-area-context \
-  react-native-screens react react-native
-
-# 5. Safety net — fix any remaining version mismatches
+# Extract the downloaded ZIP and change into the folder
+cd EduAttend-main
+npm install  # regenerate the SDK 58 lockfile
 npx expo install --fix
-
-# 6. Start Metro
-npx expo start --clear
+npx expo-doctor
+npm test
+npx expo start --offline --clear
 ```
 
-### Running on your phone
+Open the QR code using Expo Go or use the emulator with `npm run android`.
 
-1. Make sure your phone and laptop are on the **same WiFi network**
-2. Scan the QR code with Expo Go (Android)
-3. The app bundles and opens on your device
-
-If your phone and laptop aren't on the same network:
-```bash
-npx expo start --tunnel
-```
-
----
-
-## Build APK
-
-To build a real, installable `.apk` (no Expo Go required):
+To build an internal Android APK using the project's configured EAS profile (after signing in and verifying the Expo project permissions):
 
 ```bash
-# 1. Install EAS CLI
-npm install -g eas-cli
-
-# 2. Log in with your Expo account (free at expo.dev/signup)
-eas login
-
-# 3. Configure the project
-eas build:configure
-
-# 4. Build for Android
-eas build --platform android --profile preview
+npx eas-cli build --platform android --profile preview
 ```
 
-~15 minutes later you'll get a direct download link. Open it on your phone,
-tap install, and EduAttend runs as a standalone app with its own icon.
+**Important:** Installing or rebuilding an app is not a substitute for testing an update against your own real records. Export your previous backup before installing any update. Do not uninstall the existing app first — uninstalling can erase its private data.
 
----
+## How CSV storage works
 
-## Export Format
+The app uses the following on-device files:
 
-The Excel register matches the official printed format used in universities:
-
-```
-Row 1:  School / Department Name
-Row 2:  TEACHER NAME :  <name>
-Row 3:  CLASS NAME :  <name>    Total Classes : N    startDate  To :  endDate
-Row 4:  S.N. | MONTH >  |  2  |  2  |  3  |  3  | ... | Att | Att%
-Row 5:       | DATE >   |  9  | 10  | 11  | 17  | ...
-Row 6:       | REG NUMBER | STUDENT NAME          LEC > |  1  |  2  | ...
-Row 7+: i    | reg        | name  | P/A/L per date | =COUNTIF(...) | =ROUND(...)
+```text
+Documents/
+└── EduAttendData/
+    ├── classes.csv
+    ├── students.csv
+    ├── attendance.csv
+    ├── edit_history.csv
+    ├── settings.csv
+    └── csv_database_v1.ready
 ```
 
-Att and Att% columns use live Excel formulas — editing a P/A/L in the
-exported sheet automatically recalculates totals.
+The CSVs have explicit column headers and support quoted commas, quotation marks, line breaks and Unicode text. Each save writes the changed dataset to a temporary file before replacing its previous copy; a `.bak` copy can be recovered on read if a replacement is interrupted.
+
+These CSVs are inside **the app's private Documents directory**, not Android's public Downloads folder. To take a portable backup, go to **Backup / Restore → Download Backup (.xlsx)** and choose Downloads, Files, or Drive using the system share sheet. Excel backups can be read in Excel, LibreOffice and other spreadsheet applications. A full EduAttend restore requires a backup generated by this version — a formatted attendance *report* workbook is not a restore backup.
+
+### Migration from previous versions
+
+On the first launch after updating **the existing installed app with the same app ID and signing identity**, the new version reads old AsyncStorage records, writes all five CSV files, marks migration complete, and removes the old app-specific JSON storage keys. If CSV loading fails, the app displays an error instead of clearing your data. A fresh install has no previous data to migrate. Reinstalling as a different app, changing package IDs, or uninstalling the old build can prevent migration.
+
+**Previous `.json` export files are not restoreable from the redesigned Backup screen.** If you rely on a previous JSON backup, restore it with your old installed version first, then upgrade the app in place so the on-device records are migrated. Keep your previous backup for safety.
+
+## Development and verification
+
+```bash
+node tests/verify-data.cjs
+```
+
+This runs without native dependencies and checks CSV escaping/round trips, legacy migration, local reads/writes, edit history, serialized writes, clear behavior, date validation and backup workbook worksheet structures.
+
+Static SDK 58 configuration checks are provided via `npm test`. **Device-specific Expo behavior, live XLSX binary import/export, UI layouts on physical phones and an Android APK build have not been validated in this sandbox**; test them in Expo Go / an internal build before publishing.
+
+## Project layout
+
+```text
+app/                       Expo Router screens
+src/components/UI.js       Shared cards, buttons, inputs, status controls
+src/context/AppContext.js  Application state and actions
+src/utils/theme.js         Visual design tokens
+src/utils/dates.js         Local date handling and validation
+src/utils/csvDatabase.js   CSV persistence and one-time migration
+src/utils/storage.js       Storage interface
+src/utils/xlsxExport.js    Formatted attendance report workbooks
+src/utils/workbookBackup.js XLSX backup and restore schema
+tests/verify-data.cjs      Dependency-free data tests
+docs/                      Design notes and historical screenshots
+```
+
+### Design direction
+
+The screenshots in `Up.zip` were used **for comparison only**, particularly for its quick class navigation and visible P/A/L attendance colors. EduAttend uses its own visual language, does not copy the other app's graphics, and does not introduce unrelated features.
+
+## Privacy
+
+Records are saved locally on your device. No data is sent to the developer by this app's attendance storage layer. When sharing an Excel backup, you choose the destination; protect the backup because it may contain student names and attendance histories.
 
 ---
 
-## Contributing
+EduAttend · Offline by default · Designed for clear everyday attendance work.
 
-Pull requests are welcome. For major changes, please open an issue first.
+### Expo SDK 58 notes
 
-1. Fork the repo
-2. Create your feature branch: `git checkout -b feature/your-feature`
-3. Commit your changes: `git commit -m 'Add some feature'`
-4. Push to the branch: `git push origin feature/your-feature`
-5. Open a Pull Request
-
----
-
-## License
-
-MIT © 2026 — feel free to use, modify, and distribute.
-
----
-
-<div align="center">
-Built with ❤️ for teachers who deserve better tools.
-</div>
+**Do not use the SDK 56 `package-lock.json`.** This ZIP omits it intentionally. `npm install` creates the new lockfile; SDK 58 dependency installation, Metro, Android builds and real phone workflows remain to be verified on a machine with npm registry access. For full migration instructions see `UPGRADE_TO_SDK58.md`.

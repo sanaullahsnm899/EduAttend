@@ -1,17 +1,20 @@
+import { Text } from '../src/components/Typography';
 // FILE: app/attendance.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../src/context/AppContext';
 import {
   Header,
+  BottomNav,
+  Avatar,
   PrimaryBtn,
   InputField,
   AttBtn,
@@ -22,6 +25,7 @@ import {
 } from '../src/components/UI';
 import { exportAttendanceXLSX } from '../src/utils/xlsxExport';
 import { COLORS, SIZES, FONTS } from '../src/utils/theme';
+import { localDateKey, isValidDateKey } from '../src/utils/dates';
 
 function formatDateTime(date) {
   const d = date || new Date();
@@ -48,7 +52,7 @@ export default function AttendanceScreen() {
     getEditHistory,
   } = useApp();
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateKey();
 
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedClassId, setSelectedClassId] = useState(
@@ -87,23 +91,23 @@ export default function AttendanceScreen() {
     }
     setEditHistory(hist || []);
     setIsEditMode(false);
-  }, [selectedDate, selectedClassId, attendance]);
+  }, [selectedDate, selectedClassId, attendance, students]);
 
   useEffect(() => {
     loadAttendance();
-  }, [selectedDate, selectedClassId, attendance]);
+  }, [loadAttendance]);
 
   function setStatus(studentId, status) {
     setAttRecord((prev) => ({ ...prev, [studentId]: status }));
   }
 
   function getRowStyle(student) {
-    const status = attRecord[student.id] || 'A';
+    const status = attRecord[student.id] || null;
     const isEdited = savedRecord && savedRecord[student.id] !== attRecord[student.id];
     if (isEdited && isEditMode) return { backgroundColor: COLORS.editedRow };
     if (status === 'P') return { backgroundColor: COLORS.presentRow };
     if (status === 'L') return { backgroundColor: COLORS.leaveRow };
-    return { backgroundColor: COLORS.absentRow };
+    return { backgroundColor: status === 'A' ? COLORS.absentRow : '#FFFFFF' };
   }
 
   function isEdited(student) {
@@ -115,12 +119,21 @@ export default function AttendanceScreen() {
   }
 
   async function handleSave() {
+    if (!isValidDateKey(selectedDate)) {
+      Alert.alert('Check Date', 'Please enter a real date in YYYY-MM-DD format.');
+      return;
+    }
     if (!selectedClassId) {
       Alert.alert('Select Class', 'Please select a class first.');
       return;
     }
     if (studentsInClass.length === 0) {
       Alert.alert('No Students', 'No students in this class.');
+      return;
+    }
+    const missing = studentsInClass.filter(s => !['P','A','L'].includes(attRecord[s.id]));
+    if (missing.length) {
+      Alert.alert('Incomplete register', `Mark attendance for ${missing.length} newly added/unmarked student(s) before saving.`);
       return;
     }
     setSaving(true);
@@ -154,7 +167,7 @@ export default function AttendanceScreen() {
     }
   }
 
-  async function handleExportCSV() {
+  async function handleExportXLSX() {
     if (!selectedClassId) {
       Alert.alert('Select Class', 'Please select a class first.');
       return;
@@ -209,432 +222,61 @@ export default function AttendanceScreen() {
     (s) => attRecord[s.id] === 'L'
   ).length;
 
+  const unmarkedCount = studentsInClass.filter(s => !['P', 'A', 'L'].includes(attRecord[s.id])).length;
   const recentHistory = editHistory.slice(0, 20);
 
   return (
     <View style={styles.root}>
-      <Header
-        title="Take Attendance"
-        onBack={() => router.back()}
-        rightComponent={
-          savedRecord && !isEditMode ? (
-            <TouchableOpacity style={styles.editHeaderBtn} onPress={enterEditMode}>
-              <Text style={styles.editHeaderBtnText}>✏️ Edit</Text>
-            </TouchableOpacity>
-          ) : null
-        }
-      />
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Controls */}
-        <View style={styles.controlsCard}>
-          <InputField
-            label="Date (YYYY-MM-DD)"
-            value={selectedDate}
-            onChangeText={setSelectedDate}
-            placeholder="2024-11-15"
-            keyboardType="numbers-and-punctuation"
-          />
-          <View style={{ zIndex: 10 }}>
-            <PickerRow
-              label="Select Class"
-              value={selectedClassId}
-              options={classOptions}
-              onSelect={setSelectedClassId}
-            />
+      <Header title="Take attendance" onBack={() => router.back()}
+        rightComponent={savedRecord && !isEditMode ? <TouchableOpacity accessibilityRole="button" accessibilityLabel="Edit saved register" style={styles.editBtn} onPress={enterEditMode}><Ionicons name="create-outline" size={17} color="#FFFFFF"/><Text style={styles.editBtnText}>Edit</Text></TouchableOpacity> : null} />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <View style={styles.selector}>
+          <View style={styles.selectorTop}><Text style={styles.sectionTitle}>Register details</Text><TouchableOpacity accessibilityRole="button" onPress={() => setSelectedDate(localDateKey())} style={styles.todayBtn}><Ionicons name="today-outline" color={COLORS.primaryDark} size={15}/><Text style={styles.todayText}>Today</Text></TouchableOpacity></View>
+          <View style={styles.selectRow}>
+            <View style={{flex:1.1,minWidth:0}}><PickerRow label="Class" value={selectedClassId} options={classOptions} onSelect={setSelectedClassId}/></View>
+            <View style={{flex:.93,minWidth:0}}><InputField label="Date (YYYY-MM-DD)" value={selectedDate} onChangeText={setSelectedDate} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" style={styles.dateInput}/></View>
           </View>
         </View>
-
-        {/* Edit Mode Banner */}
-        {isEditMode && (
-          <View style={styles.editBanner}>
-            <View style={styles.editBannerLeft}>
-              <Text style={styles.editBannerText}>
-                ✏️ Edit Mode ON — Tap any button to correct a mistake. Amber highlight = changed from saved record.
-              </Text>
-            </View>
-            <TouchableOpacity style={styles.donePill} onPress={exitEditMode}>
-              <Text style={styles.donePillText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Status Banner */}
-        {selectedClassId && savedRecord && !isEditMode && (
-          <View style={styles.savedBanner}>
-            <Text style={styles.savedBannerText}>
-              ✅ Record exists for this date. Tap "✏️ Edit" to make corrections.
-            </Text>
-          </View>
-        )}
-
-        {/* Color Legend */}
-        {selectedClassId && studentsInClass.length > 0 && (
-          <View style={styles.legendRow}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: COLORS.presentBg }]} />
-              <Text style={styles.legendText}>Present</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: COLORS.absentBg }]} />
-              <Text style={styles.legendText}>Absent</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: COLORS.leaveBg }]} />
-              <Text style={styles.legendText}>Leave</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#c9a227' }]} />
-              <Text style={styles.legendText}>Edited</Text>
-            </View>
-          </View>
-        )}
-
-        {/* Summary Row */}
-        {selectedClassId && studentsInClass.length > 0 && (
-          <View style={styles.summaryRow}>
-            <View style={[styles.summaryBox, { borderLeftColor: COLORS.presentBg }]}>
-              <Text style={[styles.summaryVal, { color: COLORS.presentBg }]}>{presentCount}</Text>
-              <Text style={styles.summaryLabel}>Present</Text>
-            </View>
-            <View style={[styles.summaryBox, { borderLeftColor: COLORS.absentBg }]}>
-              <Text style={[styles.summaryVal, { color: COLORS.absentBg }]}>{absentCount}</Text>
-              <Text style={styles.summaryLabel}>Absent</Text>
-            </View>
-            <View style={[styles.summaryBox, { borderLeftColor: COLORS.leaveBg }]}>
-              <Text style={[styles.summaryVal, { color: COLORS.leaveBg }]}>{leaveCount}</Text>
-              <Text style={styles.summaryLabel}>Leave</Text>
-            </View>
-          </View>
-        )}
-
-        {/* Student List */}
-        {!selectedClassId ? (
-          <EmptyState
-            icon="📋"
-            title="Select a class"
-            subtitle="Choose a class and date above to start taking attendance."
-          />
-        ) : studentsInClass.length === 0 ? (
-          <EmptyState
-            icon="👨‍🎓"
-            title="No students in this class"
-            subtitle="Add students to this class to start taking attendance."
-            actionLabel="Go to Students"
-            onAction={() => router.push('/students')}
-          />
-        ) : (
-          <View style={styles.listCard}>
-            <Text style={styles.listTitle}>
-              {selectedClass?.name} — {studentsInClass.length} Student{studentsInClass.length !== 1 ? 's' : ''}
-            </Text>
-            {studentsInClass.map((student, idx) => {
-              const status = attRecord[student.id] || 'A';
-              const editedRow = isEdited(student);
-              return (
-                <View
-                  key={student.id}
-                  style={[styles.studentRow, getRowStyle(student)]}
-                >
-                  <View style={styles.studentLeft}>
-                    <Text style={styles.studentIdx}>{idx + 1}.</Text>
-                    <View style={styles.studentNameWrap}>
-                      <Text style={styles.studentName} numberOfLines={1}>
-                        {student.name}
-                      </Text>
-                      <View style={styles.studentMetaRow}>
-                        <Text style={styles.studentReg}>{student.reg}</Text>
-                        {editedRow && (
-                          <View style={styles.editedPill}>
-                            <Text style={styles.editedPillText}>edited</Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  </View>
-                  <View style={styles.attBtns}>
-                    <AttBtn
-                      status={status}
-                      type="P"
-                      onPress={() => setStatus(student.id, 'P')}
-                      locked={isLocked}
-                    />
-                    <AttBtn
-                      status={status}
-                      type="A"
-                      onPress={() => setStatus(student.id, 'A')}
-                      locked={isLocked}
-                    />
-                    <AttBtn
-                      status={status}
-                      type="L"
-                      onPress={() => setStatus(student.id, 'L')}
-                      locked={isLocked}
-                    />
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Action Buttons */}
-        {selectedClassId && studentsInClass.length > 0 && (
-          <View style={styles.actionRow}>
-            <PrimaryBtn
-              label="💾 Save"
-              onPress={handleSave}
-              loading={saving}
-              style={styles.saveBtn}
-              disabled={isLocked}
-            />
-            <PrimaryBtn
-              label="⬇ Excel"
-              onPress={handleExportCSV}
-              loading={exporting}
-              color={COLORS.secondary}
-              style={styles.csvBtn}
-            />
-          </View>
-        )}
-
-        {/* Edit History */}
-        {recentHistory.length > 0 && (
-          <View style={styles.historyCard}>
-            <Text style={styles.historyTitle}>📋 Edit History</Text>
-            {recentHistory.map((entry, idx) => (
-              <EditHistoryItem key={idx} entry={entry} />
-            ))}
-          </View>
-        )}
-
-        <View style={{ height: SIZES.xxxl }} />
+        {savedRecord && unmarkedCount > 0 && !isEditMode && <View style={styles.editBanner}>
+          <Ionicons name="alert-circle-outline" color="#A06B1A" size={18}/>
+          <Text style={styles.editBannerText}>{unmarkedCount} student(s) have no saved attendance for this date. Tap Edit to mark them. They are not automatically absent.</Text>
+        </View>}
+        {isEditMode && <View style={styles.editBanner}><Ionicons name="create-outline" color="#A06B1A" size={18}/><Text style={styles.editBannerText}>Editing saved attendance. Save your changes when finished.</Text><TouchableOpacity accessibilityRole="button" onPress={exitEditMode}><Text style={styles.cancelEdit}>Cancel</Text></TouchableOpacity></View>}
+        {selectedClassId && studentsInClass.length>0 && <View style={styles.summary}>
+          <View style={styles.summaryTop}><View style={{flex:1}}><Text style={styles.smallLabel}>REGISTER STATUS</Text><Text style={styles.marked}>{studentsInClass.length} students <Text style={styles.metaText}>· {selectedClass?.name}</Text></Text></View><View style={[styles.stateBadge,savedRecord&&{backgroundColor:COLORS.primaryLight}]}><Ionicons name={savedRecord?'checkmark-circle':'ellipse-outline'} size={14} color={savedRecord?COLORS.primaryDark:'#B0781B'}/><Text style={[styles.stateText,savedRecord&&{color:COLORS.primaryDark}]}>{savedRecord?(isEditMode?'Editing':unmarkedCount?'Needs update':'Saved'):'Unsaved'}</Text></View></View>
+          <View style={styles.summaryStats}>{[
+            {label:'Present',value:presentCount,color:COLORS.presentBg,bg:'#E7F6EF'},
+            {label:'Absent',value:absentCount,color:COLORS.absentBg,bg:'#FDEEF0'},
+            {label:'Leave',value:leaveCount,color:'#AA741B',bg:'#FFF3DF'}
+          ].map((s,i)=><View key={s.label} style={[styles.summaryItem,i>0&&styles.statBorder]}><View style={[styles.countDot,{backgroundColor:s.color}]}/><Text style={styles.summaryVal}>{s.value}</Text><Text style={styles.summaryName}>{s.label}</Text></View>)}</View>
+          {unmarkedCount>0 && <Text style={styles.unmarkedText}>{unmarkedCount} unmarked student(s) — not counted as absent</Text>}
+          <View style={styles.distribution}>{[['P',presentCount,COLORS.presentBg],['A',absentCount,COLORS.absentBg],['L',leaveCount,COLORS.leaveBg]].map(([key,count,color])=>count>0?<View key={key} style={{flex:count,backgroundColor:color}}/>:null)}</View>
+        </View>}
+        {!selectedClassId ? <EmptyState icon="📋" title="Choose your class" subtitle="Select a class to open its register."/> : studentsInClass.length===0 ? <EmptyState icon="👨‍🎓" title="No students in this class" subtitle="Add students before taking attendance." actionLabel="Go to Students" onAction={()=>router.push('/students')}/> : <View style={styles.list}>
+          <View style={styles.listHeader}><View><Text style={styles.sectionTitle}>Student register</Text><Text style={styles.registerHint}>Tap P / A / L to mark each student</Text></View><View style={styles.columnTitles}><Text style={styles.columnTitle}>P</Text><Text style={styles.columnTitle}>A</Text><Text style={styles.columnTitle}>L</Text></View></View>
+          {studentsInClass.map((student,i)=>{
+            const status=attRecord[student.id]||null;const edited=isEdited(student);
+            return <View key={student.id} style={[styles.studentRow,i>0&&styles.rowBorder,edited&&{backgroundColor:COLORS.editedRow}]}>
+              <View style={styles.index}><Text style={styles.indexText}>{i+1}</Text></View>
+              <View style={styles.studentCopy}><Text style={styles.studentName} numberOfLines={1}>{student.name}</Text><Text style={styles.studentReg} numberOfLines={1}>{student.reg}{edited?' · Edited':''}</Text></View>
+              <View style={styles.attBtns}><AttBtn status={status} type="P" locked={isLocked} onPress={()=>setStatus(student.id,'P')}/><AttBtn status={status} type="A" locked={isLocked} onPress={()=>setStatus(student.id,'A')}/><AttBtn status={status} type="L" locked={isLocked} onPress={()=>setStatus(student.id,'L')}/></View>
+            </View>;
+          })}
+        </View>}
+        {recentHistory.length>0&&<View style={styles.history}><View style={styles.historyTitle}><Ionicons name="time-outline" size={18} color={COLORS.primaryDark}/><Text style={styles.sectionTitle}>Edit history</Text></View>{recentHistory.map((entry,i)=><EditHistoryItem key={i} entry={entry}/>)}</View>}
       </ScrollView>
+      {selectedClassId&&studentsInClass.length>0&&<View style={styles.actions}><View style={{flex:1.5}}><PrimaryBtn label={isLocked?'Register saved':isEditMode?'Save changes':'Save register'} onPress={handleSave} loading={saving} disabled={isLocked}/></View><View style={{flex:1}}><PrimaryBtn label="Export Excel" onPress={handleExportXLSX} loading={exporting} color={COLORS.secondary}/></View></View>}
+      <BottomNav active="/attendance"/>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  scroll: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: SIZES.lg,
-    paddingTop: SIZES.md,
-    paddingBottom: SIZES.xxxl,
-  },
-  editHeaderBtn: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SIZES.md,
-    paddingVertical: SIZES.xs + 2,
-    borderRadius: SIZES.radiusSm,
-  },
-  editHeaderBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: FONTS.sizes.sm,
-  },
-  controlsCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: SIZES.radius,
-    padding: SIZES.lg,
-    marginBottom: SIZES.md,
-    zIndex: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  editBanner: {
-    backgroundColor: '#fff8e1',
-    borderRadius: SIZES.radiusSm,
-    padding: SIZES.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SIZES.md,
-    borderLeftWidth: 4,
-    borderLeftColor: '#c9a227',
-  },
-  editBannerLeft: { flex: 1, paddingRight: SIZES.sm },
-  editBannerText: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.warning,
-    fontWeight: '600',
-    lineHeight: 18,
-  },
-  donePill: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SIZES.md,
-    paddingVertical: SIZES.xs,
-    borderRadius: 20,
-  },
-  donePillText: {
-    color: '#fff',
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '700',
-  },
-  savedBanner: {
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: SIZES.radiusSm,
-    padding: SIZES.md,
-    marginBottom: SIZES.md,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.primary,
-  },
-  savedBannerText: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.primaryDark,
-    fontWeight: '600',
-  },
-  legendRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    marginBottom: SIZES.sm,
-    gap: SIZES.md,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  legendText: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-    fontWeight: '500',
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    marginBottom: SIZES.md,
-    gap: SIZES.sm,
-  },
-  summaryBox: {
-    flex: 1,
-    backgroundColor: COLORS.card,
-    borderRadius: SIZES.radiusSm,
-    padding: SIZES.sm,
-    alignItems: 'center',
-    borderLeftWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  summaryVal: {
-    fontSize: FONTS.sizes.xl,
-    fontWeight: '900',
-  },
-  summaryLabel: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-  },
-  listCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: SIZES.radius,
-    overflow: 'hidden',
-    marginBottom: SIZES.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  listTitle: {
-    fontSize: FONTS.sizes.md,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    paddingHorizontal: SIZES.md,
-    paddingVertical: SIZES.sm,
-    backgroundColor: '#f8f8f8',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  studentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SIZES.md,
-    paddingVertical: SIZES.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e8e8e8',
-  },
-  studentLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: SIZES.sm,
-  },
-  studentIdx: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-    width: 22,
-    flexShrink: 0,
-  },
-  studentNameWrap: { flex: 1 },
-  studentName: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  studentMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 4,
-    marginTop: 1,
-  },
-  studentReg: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-    fontFamily: 'monospace',
-  },
-  editedPill: {
-    backgroundColor: COLORS.editedBadgeBg,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 10,
-  },
-  editedPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.editedBadgeText,
-  },
-  attBtns: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: SIZES.sm,
-    marginBottom: SIZES.md,
-  },
-  saveBtn: { flex: 2 },
-  csvBtn: { flex: 1 },
-  historyCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: SIZES.radius,
-    padding: SIZES.md,
-    marginBottom: SIZES.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  historyTitle: {
-    fontSize: FONTS.sizes.md,
-    fontWeight: '800',
-    color: COLORS.textPrimary,
-    marginBottom: SIZES.sm,
-  },
+  root:{flex:1,backgroundColor:COLORS.background},scroll:{flex:1},scrollContent:{paddingHorizontal:13,paddingTop:12,paddingBottom:18},
+  editBtn:{backgroundColor:'#FFFFFF1F',paddingVertical:8,paddingHorizontal:11,borderRadius:10,flexDirection:'row',alignItems:'center',gap:5},editBtnText:{color:'#FFFFFF',fontWeight:'700',fontSize:12},
+  selector:{backgroundColor:'#FFFFFF',borderRadius:15,borderWidth:1,borderColor:COLORS.border,padding:12,marginBottom:9},selectorTop:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:7},sectionTitle:{fontSize:15,fontWeight:'700',color:COLORS.textPrimary},todayBtn:{flexDirection:'row',alignItems:'center',backgroundColor:COLORS.primaryLight,borderRadius:8,paddingHorizontal:10,paddingVertical:7,gap:4},todayText:{fontSize:11,fontWeight:'700',color:COLORS.primaryDark},selectRow:{flexDirection:'row',gap:9,alignItems:'flex-start'},dateInput:{fontSize:12,paddingHorizontal:9},
+  editBanner:{flexDirection:'row',alignItems:'center',gap:7,padding:11,backgroundColor:'#FFF7E5',borderRadius:11,marginBottom:9},editBannerText:{flex:1,fontSize:12,color:'#8A611C'},cancelEdit:{fontSize:12,color:COLORS.primaryDark,fontWeight:'700'},
+  summary:{padding:12,backgroundColor:'#FFFFFF',borderWidth:1,borderColor:COLORS.border,borderRadius:15,marginBottom:9},summaryTop:{flexDirection:'row',alignItems:'center',gap:6},smallLabel:{fontSize:9,fontWeight:'700',letterSpacing:1,color:COLORS.textSecondary},marked:{fontSize:14,fontWeight:'700',color:COLORS.textPrimary,marginTop:4},metaText:{fontWeight:'400',fontSize:12,color:COLORS.textSecondary},stateBadge:{paddingVertical:6,paddingHorizontal:8,borderRadius:9,backgroundColor:'#FFF3E4',flexDirection:'row',alignItems:'center',gap:4},stateText:{fontWeight:'700',fontSize:11,color:'#A36A1A'},summaryStats:{flexDirection:'row',marginTop:12},summaryItem:{flex:1,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:5},statBorder:{borderLeftWidth:1,borderLeftColor:COLORS.border},countDot:{width:6,height:6,borderRadius:3},summaryVal:{fontSize:17,fontWeight:'700',color:COLORS.textPrimary},summaryName:{fontSize:11,color:COLORS.textSecondary},distribution:{height:5,flexDirection:'row',borderRadius:5,overflow:'hidden',backgroundColor:'#E9EFEB',marginTop:12},
+  list:{backgroundColor:'#FFFFFF',borderRadius:15,borderColor:COLORS.border,borderWidth:1,overflow:'hidden'},listHeader:{paddingHorizontal:12,paddingTop:13,paddingBottom:11,borderBottomColor:COLORS.border,borderBottomWidth:1,flexDirection:'row',justifyContent:'space-between',alignItems:'flex-end'},registerHint:{color:COLORS.textSecondary,fontSize:11,marginTop:3},columnTitles:{flexDirection:'row',gap:4},columnTitle:{width:43,fontWeight:'700',fontSize:11,textAlign:'center',color:COLORS.textSecondary},studentRow:{flexDirection:'row',alignItems:'center',paddingHorizontal:9,paddingVertical:8,minHeight:63},rowBorder:{borderTopWidth:1,borderTopColor:'#EEF3EF'},index:{width:25,alignItems:'center',justifyContent:'center'},indexText:{color:'#9AAEA5',fontSize:11,fontWeight:'600'},unmarkedText:{fontSize:11,color:'#A06B1A',marginTop:8},studentCopy:{flex:1,minWidth:0,paddingRight:5},studentName:{color:COLORS.textPrimary,fontSize:13,fontWeight:'700'},studentReg:{color:COLORS.textSecondary,fontSize:11,marginTop:3},attBtns:{flexDirection:'row',alignItems:'center'},
+  actions:{flexDirection:'row',gap:8,paddingHorizontal:13,paddingVertical:8,borderTopWidth:1,borderTopColor:COLORS.border,backgroundColor:'#FFFFFF'},history:{padding:13,backgroundColor:'#FFFFFF',borderRadius:15,borderColor:COLORS.border,borderWidth:1,marginTop:11},historyTitle:{flexDirection:'row',alignItems:'center',gap:7,marginBottom:7}
 });

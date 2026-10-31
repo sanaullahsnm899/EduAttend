@@ -1,16 +1,19 @@
+import { Text } from '../src/components/Typography';
 // FILE: app/reports.js
 import React, { useState, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
   Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../src/context/AppContext';
 import {
   Header,
+  BottomNav,
   PrimaryBtn,
   InputField,
   StatusBadge,
@@ -19,22 +22,23 @@ import {
 } from '../src/components/UI';
 import { exportAttendanceXLSX } from '../src/utils/xlsxExport';
 import { COLORS, SIZES, FONTS } from '../src/utils/theme';
+import { localDateKey } from '../src/utils/dates';
 
 export default function ReportsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { classes, students, attendance, settings } = useApp();
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateKey();
 
-  const [selectedDate, setSelectedDate] = useState(today);
+  const [selectedDate, setSelectedDate] = useState(typeof params.date === 'string' ? params.date : today);
   const [selectedClassId, setSelectedClassId] = useState(
     params.classId ? Number(params.classId) : null
   );
   const [exporting, setExporting] = useState(false);
 
   const classOptions = [
-    { label: 'All Classes', value: null },
+    { label: 'Choose a class...', value: null },
     ...classes.map((c) => ({ label: c.name, value: c.id })),
   ];
 
@@ -47,7 +51,7 @@ export default function ReportsScreen() {
 
     return studentsInClass.map((student) => ({
       student,
-      status: record ? record[student.id] || 'A' : null,
+      status: record ? (record[student.id] || null) : null,
     }));
   }, [selectedDate, selectedClassId, attendance, students]);
 
@@ -106,237 +110,21 @@ export default function ReportsScreen() {
 
   return (
     <View style={styles.root}>
-      <Header title="Reports" onBack={() => router.back()} />
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Filters */}
+      <Header title="Reports" onBack={() => router.back()}/>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.filtersCard}>
-          <InputField
-            label="Date (YYYY-MM-DD)"
-            value={selectedDate}
-            onChangeText={setSelectedDate}
-            placeholder="2024-11-15"
-            keyboardType="numbers-and-punctuation"
-          />
-          <View style={{ zIndex: 10 }}>
-            <PickerRow
-              label="Class"
-              value={selectedClassId}
-              options={classOptions}
-              onSelect={setSelectedClassId}
-            />
-          </View>
+          <View style={styles.filterHead}><Text style={styles.headTitle}>Find a register</Text><TouchableOpacity accessibilityRole="button" onPress={()=>setSelectedDate(localDateKey())} style={styles.today}><Ionicons name="today-outline" size={15} color={COLORS.primaryDark}/><Text style={styles.todayLabel}>Today</Text></TouchableOpacity></View>
+          <View style={styles.filterRow}><View style={{flex:1.12,minWidth:0}}><PickerRow label="Class" value={selectedClassId} options={classOptions} onSelect={setSelectedClassId}/></View><View style={{flex:.9,minWidth:0}}><InputField label="Date (YYYY-MM-DD)" value={selectedDate} onChangeText={setSelectedDate} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" style={{fontSize:12,paddingHorizontal:9}}/></View></View>
         </View>
-
-        {/* No class selected */}
-        {!selectedClassId ? (
-          <EmptyState
-            icon="📊"
-            title="Select a class"
-            subtitle="Choose a class and date to view the attendance report."
-          />
-        ) : !hasRecord ? (
-          <EmptyState
-            icon="📋"
-            title="No record for this date"
-            subtitle={`No attendance was taken for ${getClassName(selectedClassId)} on ${selectedDate}.`}
-            actionLabel="Take Attendance"
-            onAction={() =>
-              router.push({
-                pathname: '/attendance',
-                params: { classId: selectedClassId },
-              })
-            }
-          />
-        ) : (
-          <>
-            {/* Stats Row */}
-            <View style={styles.statsRow}>
-              <View style={[styles.statBox, { borderTopColor: COLORS.presentBg }]}>
-                <Text style={[styles.statVal, { color: COLORS.presentBg }]}>
-                  {stats.present}
-                </Text>
-                <Text style={styles.statLabel}>Present</Text>
-                {stats.total > 0 && (
-                  <Text style={styles.statPct}>
-                    {((stats.present / stats.total) * 100).toFixed(0)}%
-                  </Text>
-                )}
-              </View>
-              <View style={[styles.statBox, { borderTopColor: COLORS.absentBg }]}>
-                <Text style={[styles.statVal, { color: COLORS.absentBg }]}>
-                  {stats.absent}
-                </Text>
-                <Text style={styles.statLabel}>Absent</Text>
-                {stats.total > 0 && (
-                  <Text style={styles.statPct}>
-                    {((stats.absent / stats.total) * 100).toFixed(0)}%
-                  </Text>
-                )}
-              </View>
-              <View style={[styles.statBox, { borderTopColor: COLORS.leaveBg }]}>
-                <Text style={[styles.statVal, { color: COLORS.leaveBg }]}>
-                  {stats.leave}
-                </Text>
-                <Text style={styles.statLabel}>Leave</Text>
-                {stats.total > 0 && (
-                  <Text style={styles.statPct}>
-                    {((stats.leave / stats.total) * 100).toFixed(0)}%
-                  </Text>
-                )}
-              </View>
-            </View>
-
-            {/* Student List */}
-            <View style={styles.listCard}>
-              <Text style={styles.listHeader}>
-                {getClassName(selectedClassId)} — {selectedDate}
-              </Text>
-              {reportData.map(({ student, status }, idx) => (
-                <View key={student.id} style={styles.reportRow}>
-                  <View style={styles.rowLeft}>
-                    <Text style={styles.rowIdx}>{idx + 1}.</Text>
-                    <View style={styles.rowInfo}>
-                      <Text style={styles.rowName}>{student.name}</Text>
-                      <Text style={styles.rowReg}>{student.reg}</Text>
-                    </View>
-                  </View>
-                  <StatusBadge status={status || 'A'} />
-                </View>
-              ))}
-            </View>
-
-            {/* Export Button */}
-            <PrimaryBtn
-              label="⬇ Export Report (Excel)"
-              onPress={handleExport}
-              loading={exporting}
-              color={COLORS.secondary}
-              style={styles.exportBtn}
-            />
-          </>
-        )}
-
-        <View style={{ height: SIZES.xxxl }} />
-      </ScrollView>
+        {!selectedClassId ? <EmptyState icon="📊" title="Choose a class" subtitle="Select a class and date to review the saved register."/> : !hasRecord ? <EmptyState icon="📋" title="No saved register" subtitle={`Nothing saved for ${getClassName(selectedClassId)} on ${selectedDate}.`} actionLabel="Take attendance" onAction={()=>router.push({pathname:'/attendance',params:{classId:selectedClassId}})}/> : <>
+          <View style={styles.reportHeadline}><View style={{flex:1}}><Text style={styles.headTitle} numberOfLines={1}>{getClassName(selectedClassId)}</Text><Text style={styles.reportDate}>{selectedDate} · {stats.total} students</Text></View><View style={styles.savedPill}><Ionicons name="checkmark-circle" size={14} color={COLORS.primaryDark}/><Text style={styles.savedText}>Saved</Text></View></View>
+          <View style={styles.stats}>{[{value:stats.present,label:'Present',color:COLORS.presentBg},{value:stats.absent,label:'Absent',color:COLORS.absentBg},{value:stats.leave,label:'Leave',color:'#B87B20'}].map(s=><View key={s.label} style={styles.stat}><Text style={[styles.statValue,{color:s.color}]}>{s.value}</Text><Text style={styles.statLabel}>{s.label}</Text></View>)}</View>
+          <View style={styles.list}><View style={styles.listHeading}><Text style={styles.listTitle}>Student register</Text><Text style={styles.listHelp}>STATUS</Text></View>{reportData.map(({student,status},idx)=><View key={student.id} style={[styles.row,idx>0&&styles.rowDivider]}><Text style={styles.rowIndex}>{idx+1}</Text><View style={{flex:1,minWidth:0}}><Text style={styles.rowName} numberOfLines={1}>{student.name}</Text><Text style={styles.rowReg}>{student.reg}</Text></View>{status ? <StatusBadge status={status}/> : <Text style={styles.unmarked}>Unmarked</Text>}</View>)}</View>
+          <PrimaryBtn label="Export Excel report" color={COLORS.secondary} onPress={handleExport} loading={exporting} style={{marginTop:12}}/>
+        </>}
+      </ScrollView><BottomNav active="/reports"/>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  scroll: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: SIZES.lg,
-    paddingTop: SIZES.md,
-    paddingBottom: SIZES.xxxl,
-  },
-  filtersCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: SIZES.radius,
-    padding: SIZES.lg,
-    marginBottom: SIZES.md,
-    zIndex: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: SIZES.sm,
-    marginBottom: SIZES.md,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: COLORS.card,
-    borderRadius: SIZES.radiusSm,
-    padding: SIZES.md,
-    alignItems: 'center',
-    borderTopWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  statVal: {
-    fontSize: FONTS.sizes.xxl,
-    fontWeight: '900',
-  },
-  statLabel: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  statPct: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-    marginTop: 1,
-  },
-  listCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: SIZES.radius,
-    overflow: 'hidden',
-    marginBottom: SIZES.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  listHeader: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    paddingHorizontal: SIZES.md,
-    paddingVertical: SIZES.sm,
-    backgroundColor: '#f8f8f8',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  reportRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SIZES.md,
-    paddingVertical: SIZES.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  rowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    paddingRight: SIZES.sm,
-  },
-  rowIdx: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-    width: 22,
-    flexShrink: 0,
-  },
-  rowInfo: { flex: 1 },
-  rowName: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  rowReg: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-    fontFamily: 'monospace',
-  },
-  exportBtn: {
-    marginBottom: SIZES.md,
-  },
-});
+const styles=StyleSheet.create({unmarked:{fontSize:11,color:COLORS.textSecondary,fontStyle:'italic'},root:{flex:1,backgroundColor:COLORS.background},scroll:{flex:1},scrollContent:{padding:13,paddingBottom:28},filtersCard:{backgroundColor:'#fff',padding:12,borderWidth:1,borderColor:COLORS.border,borderRadius:15,marginBottom:10},filterHead:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:6},headTitle:{color:COLORS.textPrimary,fontWeight:'700',fontSize:15},today:{flexDirection:'row',alignItems:'center',gap:5,backgroundColor:COLORS.primaryLight,paddingHorizontal:10,paddingVertical:7,borderRadius:8},todayLabel:{color:COLORS.primaryDark,fontWeight:'700',fontSize:11},filterRow:{flexDirection:'row',alignItems:'flex-start',gap:9},reportHeadline:{flexDirection:'row',alignItems:'center',paddingHorizontal:3,marginTop:9,marginBottom:11},reportDate:{fontSize:12,color:COLORS.textSecondary,marginTop:3},savedPill:{backgroundColor:COLORS.primaryLight,borderRadius:9,paddingHorizontal:9,paddingVertical:7,flexDirection:'row',gap:4,alignItems:'center'},savedText:{fontSize:11,color:COLORS.primaryDark,fontWeight:'700'},stats:{flexDirection:'row',gap:8,marginBottom:12},stat:{flex:1,backgroundColor:'#fff',borderRadius:12,borderWidth:1,borderColor:COLORS.border,padding:12,alignItems:'center'},statValue:{fontSize:22,fontWeight:'700'},statLabel:{color:COLORS.textSecondary,fontSize:11,marginTop:3},list:{backgroundColor:'#fff',borderRadius:15,borderColor:COLORS.border,borderWidth:1,overflow:'hidden'},listHeading:{flexDirection:'row',justifyContent:'space-between',padding:12,borderBottomColor:COLORS.border,borderBottomWidth:1},listTitle:{fontSize:14,fontWeight:'700',color:COLORS.textPrimary},listHelp:{fontWeight:'600',fontSize:10,color:COLORS.textSecondary,letterSpacing:.7},row:{minHeight:61,paddingVertical:10,paddingHorizontal:12,alignItems:'center',flexDirection:'row',gap:9},rowDivider:{borderTopWidth:1,borderTopColor:COLORS.border},rowIndex:{fontWeight:'600',width:19,fontSize:11,color:COLORS.textSecondary},rowName:{fontSize:13,fontWeight:'700',color:COLORS.textPrimary},rowReg:{color:COLORS.textSecondary,fontSize:11,marginTop:3}});

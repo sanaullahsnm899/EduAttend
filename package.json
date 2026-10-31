@@ -6,26 +6,37 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test": "node tests/verify-data.cjs && node tests/verify-sdk58.cjs",
+    "check:sdk": "node tests/verify-sdk58.cjs",
+    "doctor": "expo install --check && npx expo-doctor"
   },
   "dependencies": {
+    "@expo-google-fonts/inter": "^0.4.2",
+    "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "expo": "~56.0.0",
-    "expo-document-picker": "~56.0.4",
-    "expo-file-system": "~56.0.8",
-    "expo-linear-gradient": "~56.0.4",
-    "expo-linking": "~56.0.14",
-    "expo-router": "~56.2.11",
-    "expo-sharing": "~56.0.18",
-    "expo-splash-screen": "~56.0.10",
-    "expo-status-bar": "~56.0.4",
-    "react": "19.2.3",
-    "react-native": "0.85.3",
-    "react-native-safe-area-context": "~5.7.0",
-    "react-native-screens": "4.25.2",
+    "expo": "~58.0.0",
+    "expo-constants": "~58.0.14",
+    "expo-document-picker": "~58.0.4",
+    "expo-file-system": "~58.0.13",
+    "expo-font": "~58.0.11",
+    "expo-linear-gradient": "~58.0.3",
+    "expo-linking": "~58.0.15",
+    "expo-router": "~58.0.28",
+    "expo-sharing": "~58.0.21",
+    "expo-splash-screen": "~58.0.11",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-safe-area-context": "~5.10.1",
+    "react-native-screens": "~4.30.0",
     "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"
+  },
+  "engines": {
+    "node": ">=22.13.0"
   }
 }
